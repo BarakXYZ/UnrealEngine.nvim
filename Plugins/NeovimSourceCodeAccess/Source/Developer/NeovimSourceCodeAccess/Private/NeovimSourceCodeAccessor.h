@@ -92,7 +92,19 @@ class FNeovimSourceCodeAccessor : public ISourceCodeAccessor
     virtual void Tick(const float DeltaTime) override;
 
   private:
-    FString Application = TEXT("nvim");
+    FString GetNvimPath() const
+    {
+        // Try to get full path from NVIM_PATH environment variable (set by Neovim plugin)
+        FString NvimPath = FPlatformMisc::GetEnvironmentVariable(TEXT("NVIM_PATH"));
+        if (!NvimPath.IsEmpty())
+        {
+            return NvimPath;
+        }
+        // Fall back to just "nvim" and hope it's in PATH
+        return TEXT("nvim");
+    }
+
+    FString Application = GetNvimPath();
     FString RemoteServer = FPlatformMisc::GetEnvironmentVariable(TEXT("NVIM"));
     FString CurrentWorkingDirectory = FPlatformProcess::GetCurrentWorkingDirectory();
     bool NeovimExecute(const TCHAR* Arguments, const TCHAR* Command) const;

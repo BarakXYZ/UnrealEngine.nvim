@@ -373,30 +373,38 @@ function M.open_unreal_editor(opts)
     local engine_binary_path = M.get_engine_binary_path(opts)
     local uproject = M.get_uproject_path_info(opts.uproject_path)
 
-    ---@type string
-    local cmd
+    ---@type string[]
+    local cmd = { engine_binary_path }
     if uproject then
-        cmd = table.concat({
-            M.wrap(engine_binary_path),
-            M.wrap(uproject.path),
-        }, " ")
-    else
-        cmd = M.wrap(engine_binary_path)
+        table.insert(cmd, uproject.path)
     end
 
-    local environment_variables = ""
-    if opts.environment_variables and jit.os ~= "Windows" then
-        for k, v in pairs(opts.environment_variables) do
-            environment_variables = environment_variables .. k .. '="' .. v .. '" '
+    -- Build environment variables table for jobstart
+    -- IMPORTANT: Start with ALL current environment variables
+    -- because jobstart's env option REPLACES the environment entirely
+    local env_table = {}
+    for k, v in pairs(vim.fn.environ()) do
+        env_table[k] = v
+    end
+
+    -- On macOS/Linux, pass the full path to nvim so the C++ plugin can find it
+    -- ExecProcess doesn't inherit PATH properly on macOS, so we need the full path
+    if jit.os ~= "Windows" then
+        local nvim_path = vim.fn.exepath("nvim")
+        if nvim_path and nvim_path ~= "" then
+            env_table.NVIM_PATH = nvim_path
         end
     end
 
-    if environment_variables then
-        cmd = environment_variables .. cmd
+    -- Add user-specified environment variables (these can override defaults)
+    if opts.environment_variables and jit.os ~= "Windows" then
+        for k, v in pairs(opts.environment_variables) do
+            env_table[k] = v
+        end
     end
 
     -- Start Unreal Engine
-    vim.fn.jobstart(cmd, { detach = true })
+    vim.fn.jobstart(cmd, { detach = true, env = env_table })
 end
 
 --- Cleans the project by deleting generated files
