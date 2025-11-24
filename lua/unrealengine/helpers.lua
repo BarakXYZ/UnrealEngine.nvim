@@ -200,8 +200,69 @@ function M.wrap(value)
     return '"' .. value .. '"'
 end
 
+--- Builds a command array for jobstart from string arguments
+---@param script string Path to the build script
+---@param target string Build target (e.g., "TestProjectEditor")
+---@param platform string Platform (Win64, Linux, Mac)
+---@param config string Build configuration (Development, Shipping, etc.)
+---@param args string|nil Additional arguments (e.g., "-mode=GenerateClangDatabase")
+---@param uproject_path string Path to .uproject file
+---@param with_editor boolean Whether to include -Editor flag
+---@param check_cc boolean Whether to check for compile_commands.json
+---@param engine_path string Path to engine root
+---@return table Command array ready for jobstart
+local function build_command_array(script, target, platform, config, args, uproject_path, with_editor, check_cc, engine_path)
+    local cmd = {}
+
+    -- On Windows, batch files must be invoked through cmd.exe
+    if jit.os == "Windows" then
+        table.insert(cmd, "cmd.exe")
+        table.insert(cmd, "/c")
+    end
+
+    table.insert(cmd, script)
+    table.insert(cmd, target)
+    table.insert(cmd, platform)
+    table.insert(cmd, config)
+
+    -- Parse and add additional arguments
+    if args and args ~= "" then
+        for arg in string.gmatch(args, "%S+") do
+            if arg == "-project=" then
+                -- Special handling: append uproject path to -project= flag
+                table.insert(cmd, "-project=" .. uproject_path)
+            else
+                table.insert(cmd, arg)
+            end
+        end
+        -- Add uproject path if -project= wasn't in args
+        if not args:match("-project=") then
+            table.insert(cmd, uproject_path)
+        end
+    else
+        table.insert(cmd, uproject_path)
+    end
+
+    table.insert(cmd, "-game")
+    table.insert(cmd, "-engine")
+
+    if with_editor then
+        table.insert(cmd, "-Editor")
+    end
+
+    -- Skip code generation if compile_commands.json already exists
+    if check_cc then
+        local cc_path = engine_path .. M.slash .. "compile_commands.json"
+        if vim.loop.fs_stat(cc_path) then
+            table.insert(cmd, "-NoExecCodeGenActions")
+        end
+    end
+
+    return cmd
+end
+
 --- Executes the given command in a split buffer
----@param cmd string The command to run
+---@param cmd string|table The command to run (string or array)
 ---@param opts UnrealEngine.Opts Options table
 ---@param on_complete? fun(opts: UnrealEngine.Opts) on_complete
 function M.execute_command(cmd, opts, on_complete)
@@ -291,24 +352,19 @@ function M.execute_build_script(args, opts, on_complete)
         return
     end
 
-    local cmd = {
-        M.wrap(script),
-        M.wrap(uproject.name .. "Editor"),
+    local cmd = build_command_array(
+        script,
+        uproject.name .. "Editor",
         M.get_platform(),
         opts.build_type or "Development",
-        (args or "") .. M.wrap(uproject.path),
-        "-game -engine",
-        (opts.with_editor and "-Editor " or ""),
-    }
+        args,
+        uproject.path,
+        opts.with_editor or false,
+        true, -- check for compile_commands.json
+        opts.engine_path
+    )
 
-    local cc_path = opts.engine_path .. M.slash .. "compile_commands.json"
-    if vim.loop.fs_stat(cc_path) then
-        table.insert(cmd, "-NoExecCodeGenActions")
-    end
-
-    local formatted_cmd = table.concat(cmd, " ")
-
-    M.execute_command((jit.os == "Windows") and ("cmd /c " .. formatted_cmd) or formatted_cmd, opts, on_complete)
+    M.execute_command(cmd, opts, on_complete)
 end
 
 --- Open Unreal Editor, if opts.uproject_path is set, it will launch with that project
