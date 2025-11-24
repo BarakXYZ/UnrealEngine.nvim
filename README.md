@@ -203,3 +203,33 @@ To update the Unreal Engine plugin after updating the Neovim plugin:
 - **LSP not working**: Run `generate_lsp()` to create `compile_commands.json` and `.clangd` configuration
 - **Plugin not found in Unreal Engine**: Run `build_engine()` to link and compile the plugin into your engine
 - **Build failures**: Ensure you're using the source version of Unreal Engine, not the launcher version
+
+### macOS: clangd LSP Configuration
+
+If you experience LSP issues on macOS (incomplete completions, type errors, missing symbols) despite correct `compile_commands.json` generation, using Apple's clangd from Xcode Command Line Tools may resolve the problem:
+
+```lua
+local clangd_cmd = { 'clangd' }
+if vim.fn.has 'mac' == 1 then
+  clangd_cmd = { '/usr/bin/clangd' }
+end
+
+-- Using lspconfig:
+require('lspconfig').clangd.setup {
+  cmd = clangd_cmd,
+}
+
+-- Using Neovim 0.11+ native LSP:
+vim.lsp.config('clangd', {
+  cmd = clangd_cmd,
+})
+vim.lsp.enable 'clangd'
+```
+
+**Why this works:**
+
+- Unreal Engine on macOS is built with Xcode's clang++ compiler
+- Generic LLVM clangd versions (Mason, Homebrew) may not fully understand macOS SDK structure
+- Apple's clangd (`/usr/bin/clangd`) has better toolchain compatibility with Xcode-built projects
+
+**Mason users:** If Mason auto-installs clangd, add `'clangd'` to your `mason-lspconfig` `automatic_enable.exclude` list and configure manually with the path above.
