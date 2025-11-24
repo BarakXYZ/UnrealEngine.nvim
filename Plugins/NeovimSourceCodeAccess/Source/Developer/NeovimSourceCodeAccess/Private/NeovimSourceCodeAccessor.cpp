@@ -1,7 +1,13 @@
 #include "NeovimSourceCodeAccessor.h"
 #include "HAL/PlatformProcess.h"
 #include "Internationalization/Internationalization.h"
+#if PLATFORM_LINUX
 #include "Linux/LinuxPlatformProcess.h"
+#elif PLATFORM_WINDOWS
+#include "Windows/WindowsPlatformProcess.h"
+#elif PLATFORM_MAC
+#include "Mac/MacPlatformProcess.h"
+#endif
 #include "Logging/LogMacros.h"
 #include "Misc/Paths.h"
 
